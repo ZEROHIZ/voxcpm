@@ -5,6 +5,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONUNBUFFERED=1
 ENV HF_HOME=/app/data/huggingface
 ENV MODELSCOPE_CACHE=/app/data/modelscope
+ENV SETUPTOOLS_SCM_PRETEND_VERSION="0.0.0"
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
@@ -25,35 +26,17 @@ RUN apt-get update && apt-get install -y \
 # Set python3.10 as default python
 RUN ln -s /usr/bin/python3.10 /usr/bin/python
 
-# Install uv for fast package installation
-RUN curl -LsSf https://astral.sh/uv/install.sh | sh
-ENV PATH="/root/.local/bin:${PATH}"
-
 # Set working directory
 WORKDIR /app
 
-# Copy dependency files first for caching
-COPY pyproject.toml ./
-
-# Pre-install compatible PyTorch & Torchaudio CUDA 11.8 wheels
-# Use --index-url (not --extra) to FORCE uv to only use cu118 index for torch
-RUN uv pip install --system --no-cache \
-    torch torchaudio \
-    --index-url https://download.pytorch.org/whl/cu118
-
-# Compile and install remaining python dependencies (torch already satisfied, skipped)
-RUN uv pip compile pyproject.toml -o requirements.txt
-RUN uv pip install --system --no-cache -r requirements.txt
-
-# Copy the rest of the application
+# Copy the entire application code
 COPY . .
 
-# Install the local package without reinstalling dependencies
-ENV SETUPTOOLS_SCM_PRETEND_VERSION="0.0.0"
-RUN uv pip install --system --no-cache --no-deps .
+# Make entrypoint script executable
+RUN chmod +x entrypoint.sh
 
 # Expose the default port
 EXPOSE 8808
 
-# Define the default command to run the app
-CMD ["python", "app.py", "--port", "8808"]
+# Define the entrypoint to run our self-adaptive bootstrap script
+ENTRYPOINT ["./entrypoint.sh"]

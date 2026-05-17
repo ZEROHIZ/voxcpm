@@ -509,6 +509,7 @@ def print_startup_banner():
     banner += "=" * 66 + "\n"
     banner += f" 🔹 PyTorch Version    : {pytorch_version}\n"
     banner += f" 🔹 CUDA Compiled      : {cuda_compiled}\n"
+    banner += f" 🔹 Runtime Venv Path  : {sys.prefix}\n"
     
     if cuda_available:
         banner += " 🟢 GPU Acceleration   : AVAILABLE / 正常启用 (CUDA)\n"
