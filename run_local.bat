@@ -34,7 +34,7 @@ if not exist "%MARKER_FILE%" goto INSTALL_DEPS
 echo ==================================================================
 echo     Starting speech service in local virtual environment...
 echo ==================================================================
-uv run python app.py --port 8808
+%VENV_DIR%\Scripts\python app.py --port 8808
 goto END
 
 :CREATE_VENV
