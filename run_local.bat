@@ -30,6 +30,14 @@ if not exist "%VENV_DIR%" goto CREATE_VENV
 :: 6. Install dependencies if not set up
 if not exist "%MARKER_FILE%" goto INSTALL_DEPS
 
+:: Self-healing: Check if PyTorch is actually working with CUDA inside the venv
+%VENV_DIR%\Scripts\python -c "import torch; assert torch.cuda.is_available()" >nul 2>nul
+if %errorlevel% neq 0 (
+    echo [WARNING] PyTorch CUDA is not working in your local .venv. Reinstalling...
+    del "%MARKER_FILE%" >nul 2>nul
+    goto INSTALL_DEPS
+)
+
 :LAUNCH_APP
 echo ==================================================================
 echo     Starting speech service in local virtual environment...
