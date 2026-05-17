@@ -229,15 +229,23 @@ class VoxCPMDemo:
         logger.info(f"Running on device: {self.device}")
 
         self.asr_model_id = "iic/SenseVoiceSmall"
-        self.asr_model: Optional[AutoModel] = AutoModel(
+        self.asr_model: Optional[AutoModel] = None
+
+        self.voxcpm_model: Optional[voxcpm.VoxCPM] = None
+        self._model_id = model_id
+
+    def get_or_load_asr(self) -> AutoModel:
+        if self.asr_model is not None:
+            return self.asr_model
+        logger.info(f"Loading ASR model: {self.asr_model_id}")
+        self.asr_model = AutoModel(
             model=self.asr_model_id,
             disable_update=True,
             log_level="DEBUG",
             device="cuda:0" if self.device == "cuda" else "cpu",
         )
-
-        self.voxcpm_model: Optional[voxcpm.VoxCPM] = None
-        self._model_id = model_id
+        logger.info("ASR model loaded successfully.")
+        return self.asr_model
 
     def get_or_load_voxcpm(self) -> voxcpm.VoxCPM:
         if self.voxcpm_model is not None:
@@ -250,7 +258,8 @@ class VoxCPMDemo:
     def prompt_wav_recognition(self, prompt_wav: Optional[str]) -> str:
         if prompt_wav is None:
             return ""
-        res = self.asr_model.generate(input=prompt_wav, language="auto", use_itn=True)
+        asr = self.get_or_load_asr()
+        res = asr.generate(input=prompt_wav, language="auto", use_itn=True)
         return res[0]["text"].split("|>")[-1]
 
     def _build_generate_kwargs(
