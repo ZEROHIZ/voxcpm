@@ -67,31 +67,75 @@ class SpeechRequest(BaseModel):
     task_type: Optional[str] = "CustomVoice"
 
 
+def validate_audio_content(file_bytes: bytes, extension: str) -> bool:
+    """
+    Validates that the file's magic bytes (binary file signature) match its declared extension.
+    Supported strictly: .wav, .mp3, .mp4
+    """
+    if len(file_bytes) < 4:
+        return False
+        
+    ext = extension.lower()
+    
+    if ext == ".wav":
+        # WAV files start with 'RIFF' (bytes 0-3) and have 'WAVE' at offset 8 (bytes 8-11)
+        if len(file_bytes) < 12:
+            return False
+        return file_bytes[0:4] == b"RIFF" and file_bytes[8:12] == b"WAVE"
+        
+    elif ext == ".mp3":
+        # MP3 files usually start with 'ID3' (ID3v2) or MPEG frame sync (0xFF 0xFB, 0xFF 0xF3, etc.)
+        is_id3 = file_bytes[0:3] == b"ID3"
+        is_frame_sync = file_bytes[0] == 0xFF and (file_bytes[1] & 0xE0) == 0xE0
+        return is_id3 or is_frame_sync
+        
+    elif ext == ".mp4":
+        # MP4 files typically have 'ftyp' starting at index 4 (bytes 4-7)
+        if len(file_bytes) < 8:
+            return False
+        return file_bytes[4:8] == b"ftyp"
+        
+    return False
+
+
 @app.post("/v1/audio/upload")
 async def upload_audio(file: UploadFile = File(...)):
     """
-    Physical file upload endpoint (Multipart Form).
-    Receives an audio file, saves it to the server's cache directory, and returns its absolute path.
+    Physical file upload endpoint (Multipart Form) with binary-level signature validation.
+    Receives an audio file, checks extension & magic bytes, and saves it.
     """
     logger.info(f"Received file upload request: {file.filename}")
     try:
-        # Validate file extension
+        # 1. Validate file extension (Strict: only .wav, .mp3, .mp4 allowed)
         ext = os.path.splitext(file.filename)[1].lower()
-        if ext not in [".wav", ".mp3", ".flac", ".ogg", ".m4a", ".aac"]:
+        if ext not in [".wav", ".mp3", ".mp4"]:
             raise HTTPException(
                 status_code=400,
-                detail="Unsupported audio format. Supported: .wav, .mp3, .flac, .ogg, .m4a, .aac"
+                detail="Unsupported audio format. Only .wav, .mp3, and .mp4 are allowed for security."
             )
 
-        # Generate a unique secure filename and path on the server
+        # 2. Read the first 16 bytes to check the magic bytes (binary signature)
+        first_bytes = await file.read(16)
+        # Seek back to the beginning so that shutil.copyfileobj reads the entire file
+        await file.seek(0)
+
+        # 3. Perform binary-level file signature matching to block disguised script files
+        if not validate_audio_content(first_bytes, ext):
+            logger.warning(f"Security Alert: File '{file.filename}' signature mismatch. Declared extension: '{ext}' but binary signature does not match.")
+            raise HTTPException(
+                status_code=400,
+                detail="Security check failed: The file's binary content does not match its declared extension. Upload rejected."
+            )
+
+        # 4. Generate a unique secure filename and path on the server
         unique_filename = f"temp_upload_{uuid.uuid4().hex}{ext}"
         file_path = os.path.join(UPLOAD_DIR, unique_filename)
 
-        # Save the uploaded file to disk
+        # Save the validated uploaded file to disk
         with open(file_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
 
-        logger.info(f"Successfully saved uploaded file to: {file_path}")
+        logger.info(f"Successfully saved validated uploaded file to: {file_path}")
         return {"file_path": file_path}
     except HTTPException:
         raise
