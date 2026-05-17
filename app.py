@@ -34,6 +34,7 @@ logging.basicConfig(
         logging.StreamHandler(sys.stdout),
         logging.FileHandler(log_file_path, encoding="utf-8")
     ],
+    force=True,
 )
 logger = logging.getLogger(__name__)
 

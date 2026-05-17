@@ -43,15 +43,18 @@ echo ==================================================================
 echo     Starting speech service in local virtual environment...
 echo ==================================================================
 %VENV_DIR%\Scripts\python app.py --port 8808
-if %errorlevel% equ 3 (
-    echo ==================================================================
-    echo     [RESTART] Force restart signal detected (exit code 3).
-    echo               Re-launching application now...
-    echo ==================================================================
-    timeout /t 2 >nul
-    goto LAUNCH_APP
-)
+set EXIT_CODE=%errorlevel%
+echo ==================================================================
+echo     Application exited with code: %EXIT_CODE%
+echo ==================================================================
+if "%EXIT_CODE%"=="3" goto DO_RESTART
 goto END
+
+:DO_RESTART
+echo [RESTART] Force restart signal detected (exit code 3).
+echo           Re-launching application in 2 seconds...
+ping 127.0.0.1 -n 3 >nul
+goto LAUNCH_APP
 
 :CREATE_VENV
 echo [STATUS] Creating local isolated virtual environment (.venv)...
