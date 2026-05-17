@@ -35,13 +35,15 @@ WORKDIR /app
 # Copy dependency files first for caching
 COPY pyproject.toml ./
 
-# Create constraints file to pin PyTorch and Torchaudio to CUDA 11.8 versions (preventing automatic upgrades to newer CUDA versions like 13.0)
-RUN echo "torch==2.5.1+cu118" > constraints.txt && \
-    echo "torchaudio==2.5.1+cu118" >> constraints.txt
+# Pre-install compatible PyTorch & Torchaudio CUDA 11.8 wheels
+# Use --index-url (not --extra) to FORCE uv to only use cu118 index for torch
+RUN uv pip install --system --no-cache \
+    torch torchaudio \
+    --index-url https://download.pytorch.org/whl/cu118
 
-# Compile and install python dependencies using uv (caches layers)
-RUN uv pip compile pyproject.toml -c constraints.txt --extra-index-url https://download.pytorch.org/whl/cu118 --index-strategy unsafe-best-match -o requirements.txt
-RUN uv pip install --system --no-cache -r requirements.txt --extra-index-url https://download.pytorch.org/whl/cu118 --index-strategy unsafe-best-match
+# Compile and install remaining python dependencies (torch already satisfied, skipped)
+RUN uv pip compile pyproject.toml -o requirements.txt
+RUN uv pip install --system --no-cache -r requirements.txt
 
 # Copy the rest of the application
 COPY . .
