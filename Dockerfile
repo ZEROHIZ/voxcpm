@@ -13,14 +13,21 @@ RUN apt-get update && apt-get install -y \
     python3.10-venv \
     python3.10-dev \
     build-essential \
+    cmake \
+    ninja-build \
     libsndfile1 \
     ffmpeg \
     git \
     wget \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 # Set python3.10 as default python
 RUN ln -s /usr/bin/python3.10 /usr/bin/python
+
+# Install uv for fast package installation
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh
+ENV PATH="/root/.local/bin:${PATH}"
 
 # Set working directory
 WORKDIR /app
@@ -28,9 +35,8 @@ WORKDIR /app
 # Copy dependency files first for caching
 COPY pyproject.toml ./
 
-# Install python dependencies
-RUN pip install --no-cache-dir build setuptools wheel
-RUN pip install --no-cache-dir .
+# Install python dependencies using uv
+RUN uv pip install --system --no-cache .
 
 # Copy the rest of the application
 COPY . .
