@@ -12,8 +12,11 @@ import logging
 import numpy as np
 import torch
 # Restrict PyTorch thread count to prevent WSL2 CPU starvation and container crashes
-torch.set_num_threads(4)
-torch.set_num_interop_threads(4)
+try:
+    torch.set_num_threads(4)
+    torch.set_num_interop_threads(4)
+except RuntimeError:
+    pass
 import gradio as gr
 from typing import Optional, Tuple
 

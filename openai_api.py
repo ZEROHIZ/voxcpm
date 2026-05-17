@@ -20,8 +20,11 @@ os.environ["MODELSCOPE_CACHE"] = os.path.abspath(os.path.join(os.path.dirname(__
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 # Limit CPU threads to prevent system lag
-torch.set_num_threads(4)
-torch.set_num_interop_threads(4)
+try:
+    torch.set_num_threads(4)
+    torch.set_num_interop_threads(4)
+except RuntimeError:
+    pass
 
 # Set logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")

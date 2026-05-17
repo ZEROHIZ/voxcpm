@@ -117,3 +117,13 @@
   - 如果文件内容校验失败，代表文件存在伪装或损坏，系统会在保存之前立即抛出 `400 Bad Request` 拒绝上传并发出警报。
 - **预防经验**：在任何提供文件物理上传接口的 Web 网关中，**绝对不能仅仅依赖扩展名校验**。必须通过读取文件头魔术字节（Magic Bytes）进行二进制指纹比对，从物理源头上彻底掐断一切伪装木马/脚本的注入渠道。
 
+## 11. PyTorch 多重初始化导致 Interop Threads 报错（RuntimeError）
+- **问题描述**：在运行 `run_openai_api.bat` 启动网关服务时，抛出错误：`RuntimeError: Error: cannot set number of interop threads after parallel work has started or set_num_interop_threads called`。
+- **根本原因**：
+  - 在 `openai_api.py` 的顶层首先导入了 `torch` 并执行了 `torch.set_num_interop_threads(4)` 进行 CPU 线程限制。
+  - 随后网关又执行了 `from app import VoxCPMDemo`，而 `app.py` 作为被导入模块在自身初始化流程中也再次执行了相同的 `torch.set_num_interop_threads(4)`。
+  - PyTorch 规定线程池数量（Interop Threads）只能被设定一次且不能在多线程并发初始化后重复设置，从而在第二次执行时引发了锁冲突与崩溃。
+- **解决方法**：
+  - 分别在 `openai_api.py` 和 `app.py` 中将所有的 `torch.set_num_threads` 和 `torch.set_num_interop_threads` 调用包裹在 `try...except RuntimeError:` 异常保护块中，使得重复设置时可以优雅静默忽略，互不冲突。
+- **预防经验**：在设计多模块相互引用或可独立运行的 PyTorch 应用程序时，线程参数的设定（Thread Pool Limiters）一定要使用异常保护包覆，防止重复加载相同的模块导致不可预知的初始化崩溃。
+
