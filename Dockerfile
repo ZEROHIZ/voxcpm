@@ -35,9 +35,12 @@ WORKDIR /app
 # Copy dependency files first for caching
 COPY pyproject.toml ./
 
+# Pre-install compatible PyTorch & Torchaudio CUDA 11.8 wheels
+RUN uv pip install --system --no-cache torch torchaudio --extra-index-url https://download.pytorch.org/whl/cu118
+
 # Compile and install python dependencies using uv (caches layers)
-RUN uv pip compile pyproject.toml --extra-index-url https://download.pytorch.org/whl/cu118 -o requirements.txt
-RUN uv pip install --system --no-cache -r requirements.txt --extra-index-url https://download.pytorch.org/whl/cu118
+RUN uv pip compile pyproject.toml -o requirements.txt
+RUN uv pip install --system --no-cache -r requirements.txt
 
 # Copy the rest of the application
 COPY . .
