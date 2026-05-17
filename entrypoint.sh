@@ -142,5 +142,17 @@ echo "=================================================================="
 echo "    🚀 Launching VoxCPM App Service / 启动语音服务 🚀   "
 echo "=================================================================="
 
-# Run the app
-python app.py "$@"
+# Run the app in a loop to handle forced restarts (exit code 3)
+while true; do
+    python app.py "$@"
+    EXIT_CODE=$?
+    if [ $EXIT_CODE -eq 3 ]; then
+        echo "=================================================================="
+        echo "    [RESTART] Force restart signal detected (exit code 3)."
+        echo "              Re-launching application now..."
+        echo "=================================================================="
+        sleep 2
+    else
+        exit $EXIT_CODE
+    fi
+done

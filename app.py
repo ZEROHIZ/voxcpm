@@ -22,10 +22,18 @@ from pathlib import Path
 
 import voxcpm
 
+# Create log directory if it doesn't exist
+log_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "logs"))
+os.makedirs(log_dir, exist_ok=True)
+log_file_path = os.path.join(log_dir, "voxcpm_app.log")
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s",
-    handlers=[logging.StreamHandler(sys.stdout)],
+    handlers=[
+        logging.StreamHandler(sys.stdout),
+        logging.FileHandler(log_file_path, encoding="utf-8")
+    ],
 )
 logger = logging.getLogger(__name__)
 
@@ -126,6 +134,9 @@ _I18N_TRANSLATIONS = {
         "dit_steps_info": "LocDiT flow-matching steps — more steps → maybe better audio quality, but slower",
         "usage_instructions": _USAGE_INSTRUCTIONS_EN,
         "examples_footer": _EXAMPLES_FOOTER_EN,
+        "force_restart_btn": "🔄 Force Restart Service",
+        "force_restart_warning": "Warning: This will terminate the current process and restart the application. Any active generation will be interrupted.",
+        "force_restart_success": "### 🔄 Restarting service... Please refresh the page in 5-10 seconds / 正在重启服务... 请在 5-10 秒后手动刷新页面。",
     },
     "zh-CN": {
         "reference_audio_label": "🎤 参考音频（可选 — 上传后用于克隆）",
@@ -149,6 +160,9 @@ _I18N_TRANSLATIONS = {
         "dit_steps_info": "LocDiT 流匹配生成迭代步数 — 步数越多 → 可能生成更好的音频质量，但速度变慢",
         "usage_instructions": _USAGE_INSTRUCTIONS_ZH,
         "examples_footer": _EXAMPLES_FOOTER_ZH,
+        "force_restart_btn": "🔄 强制重启服务",
+        "force_restart_warning": "警告：此操作将终止当前进程并重启应用。任何正在进行的合成任务都将被中断。",
+        "force_restart_success": "### 🔄 正在重启服务... 请在 5-10 秒后手动刷新页面 / Restarting service... Please refresh the page in 5-10 seconds.",
     },
     "zh-Hans": None,  # alias, filled below
     "zh": None,       # alias, filled below
@@ -240,32 +254,70 @@ class VoxCPMDemo:
         self._model_id = model_id
 
     def get_or_load_asr(self) -> AutoModel:
-        if self.asr_model is not None:
-            return self.asr_model
         logger.info(f"Loading ASR model: {self.asr_model_id}")
-        self.asr_model = AutoModel(
+        asr_model = AutoModel(
             model=self.asr_model_id,
             disable_update=True,
             log_level="DEBUG",
             device="cuda:0" if self.device == "cuda" else "cpu",
         )
         logger.info("ASR model loaded successfully.")
-        return self.asr_model
+        return asr_model
 
     def get_or_load_voxcpm(self) -> voxcpm.VoxCPM:
-        if self.voxcpm_model is not None:
-            return self.voxcpm_model
         logger.info(f"Loading model: {self._model_id} on device: {self.device}")
-        self.voxcpm_model = voxcpm.VoxCPM.from_pretrained(self._model_id, optimize=True, device=self.device)
+        voxcpm_model = voxcpm.VoxCPM.from_pretrained(self._model_id, optimize=False, device=self.device)
         logger.info("Model loaded successfully.")
-        return self.voxcpm_model
+        return voxcpm_model
 
     def prompt_wav_recognition(self, prompt_wav: Optional[str]) -> str:
         if prompt_wav is None:
             return ""
-        asr = self.get_or_load_asr()
-        res = asr.generate(input=prompt_wav, language="auto", use_itn=True)
-        return res[0]["text"].split("|>")[-1]
+        import gc
+        import time
+        t_total_start = time.perf_counter()
+        
+        asr = None
+        t_load_start = time.perf_counter()
+        try:
+            asr = self.get_or_load_asr()
+            t_load_end = time.perf_counter()
+            t_load = t_load_end - t_load_start
+            
+            t_gen_start = time.perf_counter()
+            res = asr.generate(input=prompt_wav, language="auto", use_itn=True)
+            t_gen_end = time.perf_counter()
+            t_gen = t_gen_end - t_gen_start
+            
+            text = res[0]["text"].split("|>")[-1]
+            
+            t_total_end = time.perf_counter()
+            t_total = t_total_end - t_total_start
+            
+            timing_msg = (
+                f"\n"
+                f"==================================================\n"
+                f"🎤 ASR Recognition Performance Metrics:\n"
+                f"--------------------------------------------------\n"
+                f"⏱️ Model Loading Time (加载时间): {t_load:.4f} seconds\n"
+                f"⏱️ Model Inference Time (生成时间): {t_gen:.4f} seconds\n"
+                f"⏱️ Total Operation Time (总时间): {t_total:.4f} seconds\n"
+                f"==================================================\n"
+            )
+            logger.info(timing_msg)
+            
+            return text
+        finally:
+            if asr is not None:
+                if hasattr(asr, "model") and asr.model is not None:
+                    try:
+                        asr.model.to("cpu")
+                    except Exception:
+                        pass
+                del asr
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            gc.collect()
 
     def _build_generate_kwargs(
         self,
@@ -302,46 +354,108 @@ class VoxCPMDemo:
         denoise: bool = True,
         inference_timesteps: int = 10,
     ) -> Tuple[int, np.ndarray]:
-        current_model = self.get_or_load_voxcpm()
+        import gc
+        import time
+        t_total_start = time.perf_counter()
+        
+        current_model = None
+        t_load_start = time.perf_counter()
+        try:
+            current_model = self.get_or_load_voxcpm()
+            t_load_end = time.perf_counter()
+            t_load = t_load_end - t_load_start
 
-        text = (text_input or "").strip()
-        if len(text) == 0:
-            raise ValueError("Please input text to synthesize.")
+            text = (text_input or "").strip()
+            if len(text) == 0:
+                raise ValueError("Please input text to synthesize.")
 
-        control = (control_instruction or "").strip()
-        # Strip any parentheses (half-width/full-width) from control text to avoid
-        # breaking the "(control)text" prompt format expected by the model.
-        control = re.sub(r"[()（）]", "", control).strip()
-        final_text = f"({control}){text}" if control else text
+            control = (control_instruction or "").strip()
+            control = re.sub(r"[()（）]", "", control).strip()
+            final_text = f"({control}){text}" if control else text
 
-        audio_path = reference_wav_path_input if reference_wav_path_input else None
-        prompt_text_clean = (prompt_text or "").strip() or None
+            audio_path = reference_wav_path_input if reference_wav_path_input else None
+            prompt_text_clean = (prompt_text or "").strip() or None
 
-        if audio_path and prompt_text_clean:
-            logger.info(f"[Voice Cloning] prompt_wav + prompt_text + reference_wav")
-        elif audio_path:
-            logger.info(f"[Voice Control] reference_wav only")
-        else:
-            logger.info(f"[Voice Design] control: {control[:50] if control else 'None'}...")
+            if audio_path and prompt_text_clean:
+                logger.info(f"[Voice Cloning] prompt_wav + prompt_text + reference_wav")
+            elif audio_path:
+                logger.info(f"[Voice Control] reference_wav only")
+            else:
+                logger.info(f"[Voice Design] control: {control[:50] if control else 'None'}...")
 
-        logger.info(f"Generating audio for text: '{final_text[:80]}...'")
-        generate_kwargs = self._build_generate_kwargs(
-            final_text=final_text,
-            audio_path=audio_path,
-            prompt_text_clean=prompt_text_clean,
-            cfg_value_input=cfg_value_input,
-            do_normalize=do_normalize,
-            denoise=denoise,
-            inference_timesteps=inference_timesteps,
-        )
-        wav = current_model.generate(**generate_kwargs)
-        return (current_model.tts_model.sample_rate, wav)
+            logger.info(f"Generating audio for text: '{final_text[:80]}...'")
+            generate_kwargs = self._build_generate_kwargs(
+                final_text=final_text,
+                audio_path=audio_path,
+                prompt_text_clean=prompt_text_clean,
+                cfg_value_input=cfg_value_input,
+                do_normalize=do_normalize,
+                denoise=denoise,
+                inference_timesteps=inference_timesteps,
+            )
+            
+            t_gen_start = time.perf_counter()
+            wav = current_model.generate(**generate_kwargs)
+            t_gen_end = time.perf_counter()
+            t_gen = t_gen_end - t_gen_start
+            
+            sample_rate = current_model.tts_model.sample_rate
+            
+            t_total_end = time.perf_counter()
+            t_total = t_total_end - t_total_start
+            
+            t_synthesis = t_total - t_load
+            
+            timing_msg = (
+                f"\n"
+                f"==================================================\n"
+                f"🔊 TTS Generation Performance Metrics:\n"
+                f"--------------------------------------------------\n"
+                f"⏱️ Model Loading Time (加载时间): {t_load:.4f} seconds\n"
+                f"⏱️ Model Inference Time (生成时间): {t_gen:.4f} seconds\n"
+                f"⏱️ Pipeline Synthesis Time (合成时间): {t_synthesis:.4f} seconds\n"
+                f"⏱️ Total Operation Time (总时间): {t_total:.4f} seconds\n"
+                f"==================================================\n"
+            )
+            logger.info(timing_msg)
+            
+            return (sample_rate, wav)
+        finally:
+            if current_model is not None:
+                if hasattr(current_model, "tts_model") and current_model.tts_model is not None:
+                    try:
+                        current_model.tts_model.to("cpu")
+                    except Exception:
+                        pass
+                    del current_model.tts_model
+                if hasattr(current_model, "denoiser") and current_model.denoiser is not None:
+                    if hasattr(current_model.denoiser, "_pipeline"):
+                        del current_model.denoiser._pipeline
+                    del current_model.denoiser
+                del current_model
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            gc.collect()
 
 
 # ---------- UI ----------
 
 def create_demo_interface(demo: VoxCPMDemo):
     gr.set_static_paths(paths=[Path.cwd().absolute() / "assets"])
+
+    def _force_restart():
+        logger.info("Force restart requested by user via UI...")
+        import threading
+        import time
+        import os
+
+        def _do_exit():
+            time.sleep(1.0)
+            logger.info("Exiting Python process with exit code 3 for auto-restart...")
+            os._exit(3)
+
+        threading.Thread(target=_do_exit, daemon=True).start()
+        return I18N("force_restart_success")
 
     def _generate(
         text: str,
@@ -469,6 +583,18 @@ def create_demo_interface(demo: VoxCPMDemo):
             with gr.Column():
                 audio_output = gr.Audio(label=I18N("generated_audio_label"))
                 gr.Markdown(I18N("examples_footer"))
+                
+                # Debug & Maintenance Accordion
+                with gr.Accordion("🛠️ Diagnostics & Maintenance / 诊断与维护", open=False):
+                    gr.Markdown(I18N("force_restart_warning"))
+                    restart_btn = gr.Button(I18N("force_restart_btn"), variant="stop")
+                    restart_status = gr.Markdown(value="", elem_classes=["restart-status"])
+                    
+                    restart_btn.click(
+                        fn=_force_restart,
+                        inputs=[],
+                        outputs=[restart_status],
+                    )
 
         show_prompt_text.change(
             fn=_on_toggle_instant,
