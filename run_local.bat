@@ -16,23 +16,22 @@ set OPENBLAS_NUM_THREADS=4
 set VECLIB_MAXIMUM_THREADS=4
 set NUMEXPR_NUM_THREADS=4
 
-:: 3. Set setuptools-scm pretend version to bypass git metadata lookup error
+:: 3. Bypass setuptools-scm git repository detection
 set SETUPTOOLS_SCM_PRETEND_VERSION=0.0.0
 
 :: 4. Check if uv is installed
 where uv >nul 2>nul
 if %errorlevel% neq 0 (
-    echo [ERROR] uv tool was not found in your system PATH!
-    echo Please install uv first. In PowerShell run:
-    echo     irm astral.sh/uv ^| iex
-    echo After installation is complete, restart this terminal.
+    echo [ERROR] uv tool was not detected in system PATH!
+    echo Please install uv first (PowerShell: irm astral.sh/uv ^| iex)
+    echo After installing, restart this terminal and run again.
     pause
     exit /b 1
 )
 
 :: 5. Check if virtual environment exists, if not create it
 if not exist "%VENV_DIR%" (
-    echo [*] Creating isolated virtual environment (.venv)...
+    echo [*] Creating local isolated virtual environment (.venv)...
     uv venv %VENV_DIR%
 )
 
@@ -41,7 +40,7 @@ if not exist "%MARKER_FILE%" (
     echo [*] Installing CUDA 11.8 compatible PyTorch and Torchaudio...
     uv pip install torch==2.5.1 torchaudio==2.5.1 --index-url https://download.pytorch.org/whl/cu118
     
-    echo [*] Installing remaining project dependencies via high-speed Alibaba mirror...
+    echo [*] Installing remaining project dependencies via Alibaba Cloud mirror...
     uv pip install -e . -i https://mirrors.aliyun.com/pypi/simple
     
     echo setup_complete > "%MARKER_FILE%"
@@ -49,7 +48,7 @@ if not exist "%MARKER_FILE%" (
 )
 
 echo ==================================================================
-echo     🚀 Launching VoxCPM2 Service...
+echo     🚀 Launching VoxCPM2 Local Speech Service...
 echo ==================================================================
 
 :: 7. Launch the app using uv
