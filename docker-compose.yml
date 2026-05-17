@@ -1,0 +1,18 @@
+version: "3.8"
+
+services:
+  voxcpm:
+    build: .
+    container_name: voxcpm-demo
+    ports:
+      - "8808:8808"
+    volumes:
+      - ./pretrained_models:/app/pretrained_models
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    restart: unless-stopped
