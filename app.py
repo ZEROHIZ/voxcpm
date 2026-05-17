@@ -495,12 +495,44 @@ def create_demo_interface(demo: VoxCPMDemo):
 
     return interface
 
+def print_startup_banner():
+    import torch
+    import sys
+    
+    cuda_available = torch.cuda.is_available()
+    device_name = torch.cuda.get_device_name(0) if cuda_available else "N/A"
+    pytorch_version = torch.__version__
+    cuda_compiled = torch.version.cuda
+    
+    banner = "\n" + "=" * 66 + "\n"
+    banner += "  🚀 VoxCPM2 TTS Service Startup Diagnostics / 服务启动硬件检测 🚀  \n"
+    banner += "=" * 66 + "\n"
+    banner += f" 🔹 PyTorch Version    : {pytorch_version}\n"
+    banner += f" 🔹 CUDA Compiled      : {cuda_compiled}\n"
+    
+    if cuda_available:
+        banner += " 🟢 GPU Acceleration   : AVAILABLE / 正常启用 (CUDA)\n"
+        banner += f" 🟢 Active GPU Model   : {device_name}\n"
+    else:
+        banner += " 🔴 GPU Acceleration   : UNAVAILABLE / 无法使用 (Falling back to CPU)\n"
+        banner += " ⚠️  WARNING: PyTorch did not detect a functional GPU in this container.\n"
+        banner += "    If you passed '--gpus all', check if your Windows host GPU driver\n"
+        banner += "    satisfies the CUDA version compiled into PyTorch.\n"
+        try:
+            torch.cuda.init()
+        except Exception as e:
+            banner += f" 🔍 CUDA Init Error    : {str(e)}\n"
+            
+    banner += "=" * 66 + "\n"
+    print(banner, file=sys.stdout, flush=True)
+
 def run_demo(
     server_name: str = "0.0.0.0",
     server_port: int = 8808,
     show_error: bool = True,
     model_id: str = "openbmb/VoxCPM2",
 ):
+    print_startup_banner()
     demo = VoxCPMDemo(model_id=model_id)
     interface = create_demo_interface(demo)
     interface.queue(max_size=10, default_concurrency_limit=1).launch(
