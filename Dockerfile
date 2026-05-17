@@ -20,15 +20,12 @@ ENV VIRTUAL_ENV=/opt/venv
 RUN uv venv $VIRTUAL_ENV
 ENV PATH="$VIRTUAL_ENV/bin:$PATH"
 
-# 复制依赖文件
-COPY pyproject.toml uv.lock ./
-
-# 在虚拟环境中安装项目依赖
-# 添加了 PyTorch 官方源，因为 torchcodec 和 torch 在官方源中编译得更完整，能解决构建失败的问题
-RUN uv pip install --no-cache . --extra-index-url https://download.pytorch.org/whl/cu121
-
-# 复制项目代码
+# ！！！将完整的项目代码（包括 src 源码和 .git）复制进来！！！
+# 因为 uv pip install . 需要读取完整的项目源码才能完成自身包 (voxcpm) 的构建。
 COPY . .
+
+# 在虚拟环境中安装项目依赖，加入 -v 打印详细日志以便排错
+RUN uv pip install -v --no-cache . --extra-index-url https://download.pytorch.org/whl/cu121
 
 # 暴露端口
 EXPOSE 8808
