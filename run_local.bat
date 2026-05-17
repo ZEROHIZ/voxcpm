@@ -21,36 +21,52 @@ set SETUPTOOLS_SCM_PRETEND_VERSION=0.0.0
 
 :: 4. Check if uv is installed
 where uv >nul 2>nul
-if %errorlevel% neq 0 (
-    echo [ERROR] uv tool not found!
-    echo Please install uv first (PowerShell: irm astral.sh/uv ^| iex)
-    pause
-    exit /b 1
-)
+if %errorlevel% neq 0 goto ERROR_NO_UV
 
 :: 5. Check if virtual environment exists, if not create it
-if not exist "%VENV_DIR%" (
-    echo [STATUS] Creating local isolated virtual environment (.venv)...
-    uv venv %VENV_DIR%
-)
+if not exist "%VENV_DIR%" goto CREATE_VENV
 
+:CHECK_MARKER
 :: 6. Install dependencies if not set up
-if not exist "%MARKER_FILE%" (
-    echo [STATUS] Installing CUDA 11.8 compatible PyTorch and Torchaudio...
-    uv pip install torch==2.5.1 torchaudio==2.5.1 --index-url https://download.pytorch.org/whl/cu118
-    
-    echo [STATUS] Installing remaining project dependencies...
-    uv pip install -e . -i https://mirrors.aliyun.com/pypi/simple
-    
-    echo setup_complete > "%MARKER_FILE%"
-    echo [SUCCESS] Local virtual environment successfully configured!
-)
+if not exist "%MARKER_FILE%" goto INSTALL_DEPS
 
+:LAUNCH_APP
 echo ==================================================================
 echo     Starting speech service in local virtual environment...
 echo ==================================================================
-
-:: 7. Launch the app using uv
 uv run python app.py --port 8808
+goto END
 
+:CREATE_VENV
+echo [STATUS] Creating local isolated virtual environment (.venv)...
+uv venv %VENV_DIR%
+goto CHECK_MARKER
+
+:INSTALL_DEPS
+echo [STATUS] Installing CUDA 11.8 compatible PyTorch and Torchaudio...
+uv pip install torch==2.5.1 torchaudio==2.5.1 --index-url https://download.pytorch.org/whl/cu118
+if %errorlevel% neq 0 goto ERROR_INSTALL
+
+echo [STATUS] Installing remaining project dependencies...
+uv pip install -e . -i https://mirrors.aliyun.com/pypi/simple
+if %errorlevel% neq 0 goto ERROR_INSTALL
+
+echo setup_complete > "%MARKER_FILE%"
+echo [SUCCESS] Local virtual environment successfully configured!
+goto LAUNCH_APP
+
+:ERROR_NO_UV
+echo [ERROR] uv tool not found!
+echo Please install uv first by running this in PowerShell:
+echo   irm astral.sh/uv ^| iex
+echo After installation, please restart your terminal or computer.
+pause
+exit /b 1
+
+:ERROR_INSTALL
+echo [ERROR] Dependency installation failed! Please check the output above.
+pause
+exit /b 1
+
+:END
 pause
