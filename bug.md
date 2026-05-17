@@ -46,4 +46,6 @@
     1. 确保 Windows 宿主机安装了 NVIDIA 最新官方显卡驱动。
     2. 确保 Docker Desktop 设置中启用了 **WSL 2 based engine**。
     3. 在 Windows 终端中运行 `wsl --update` 将 WSL2 升级到支持 GPU 虚拟化的最新版本，并通过在 Windows PowerShell 运行 `nvidia-smi` 确认显卡可以被 WSL2 读取。
-- **预防经验**：深度学习容器（如搭载 PyTorch CUDA 的镜像）在任何机器上运行时，必须首先确保**宿主机**配置好了 Docker GPU 硬件穿透桥梁，否则即使镜像内 CUDA 完美，也只能运行在 CPU 上。
+  - **显卡驱动版本过旧限制**：
+    - 若容器内 PyTorch 报 `The NVIDIA driver on your system is too old (found version 12090)`，说明宿主机的物理 NVIDIA 显卡驱动版本低于当前 PyTorch 镜像编译时要求的 CUDA 最低驱动门槛（例如，Windows GPU 显卡驱动必须升级到 531.14 或更高版本以支持 CUDA 12.1+）。必须通过 NVIDIA 官方 GeForce/Studio 工具更新 Windows 主机的物理显卡驱动。
+- **预防经验**：深度学习容器（如搭载 PyTorch CUDA 的镜像）在任何机器上运行时，必须首先确保**宿主机**配置好了 Docker GPU 硬件穿透桥梁且**驱动版本符合镜像内 PyTorch/CUDA 软件库的最低要求**，否则即使镜像内 CUDA 完美，也只能静默退回到 CPU 上。
