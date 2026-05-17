@@ -1,9 +1,8 @@
 @echo off
-chcp 65001 >nul
-title VoxCPM2 Local Service Launcher / 本地极速自适应启动器
+title VoxCPM2 Local Service Launcher
 
 echo ==================================================================
-echo     🚀 VoxCPM2 Local Service Launcher / 本地极速自适应启动器 🚀
+echo     🚀 VoxCPM2 Local Service Launcher 🚀
 echo ==================================================================
 
 :: 1. Define paths
@@ -17,39 +16,43 @@ set OPENBLAS_NUM_THREADS=4
 set VECLIB_MAXIMUM_THREADS=4
 set NUMEXPR_NUM_THREADS=4
 
-:: 3. Check if uv is installed
+:: 3. Set setuptools-scm pretend version to bypass git metadata lookup error
+set SETUPTOOLS_SCM_PRETEND_VERSION=0.0.0
+
+:: 4. Check if uv is installed
 where uv >nul 2>nul
 if %errorlevel% neq 0 (
-    echo [错误] 未在系统环境变量中检测到 uv 工具！
-    echo 请先安装 uv（打开 PowerShell 并运行: irm astral.sh/uv ^| iex ）
-    echo 安装完成后请重启此终端再运行。
+    echo [ERROR] uv tool was not found in your system PATH!
+    echo Please install uv first. In PowerShell run:
+    echo     irm astral.sh/uv ^| iex
+    echo After installation is complete, restart this terminal.
     pause
     exit /b 1
 )
 
-:: 4. Check if virtual environment exists, if not create it
+:: 5. Check if virtual environment exists, if not create it
 if not exist "%VENV_DIR%" (
-    echo 🔹 正在创建本地隔离虚拟环境 (.venv)...
+    echo [*] Creating isolated virtual environment (.venv)...
     uv venv %VENV_DIR%
 )
 
-:: 5. Install dependencies if not set up
+:: 6. Install dependencies if not set up
 if not exist "%MARKER_FILE%" (
-    echo 🔹 正在通过 uv 高速安装 CUDA 11.8 兼容版 PyTorch 与 Torchaudio...
+    echo [*] Installing CUDA 11.8 compatible PyTorch and Torchaudio...
     uv pip install torch==2.5.1 torchaudio==2.5.1 --index-url https://download.pytorch.org/whl/cu118
     
-    echo 🔹 正在通过阿里云高速镜像源安装项目其他全部依赖...
+    echo [*] Installing remaining project dependencies via high-speed Alibaba mirror...
     uv pip install -e . -i https://mirrors.aliyun.com/pypi/simple
     
     echo setup_complete > "%MARKER_FILE%"
-    echo 🟢 本地虚拟环境及依赖配置成功！
+    echo [SUCCESS] Local virtual environment successfully configured!
 )
 
 echo ==================================================================
-echo     🚀 正在使用本地虚拟环境极速拉起语音服务...
+echo     🚀 Launching VoxCPM2 Service...
 echo ==================================================================
 
-:: 6. Launch the app using uv
+:: 7. Launch the app using uv
 uv run python app.py --port 8808
 
 pause
