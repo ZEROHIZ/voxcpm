@@ -61,12 +61,40 @@ VoxCPM2 拥有极强的多语言理解与合成能力，直接输入对应语种
 > [!IMPORTANT]
 > ### 💡 为什么 data 会没有键位（Key-Value 对）？
 > 
-> 本项目的 HTTP API 是基于 **Gradio 框架**底层自动导出的。Gradio 框架的 REST API 设计有其独特的规范：
-> 1. **基于位置的参数设计 (Position-based arguments)**：Gradio 会把前端 UI 中声明的每一个输入控件（例如“目标文本框”、“控制指令描述框”、“参考音频上传组件”、“CFG滑动条”等）按照它们在后台网页代码中定义的**声明顺序**，统一打包存放在一个无键值的列表数组中。
-> 2. **没有显式键位**：Gradio 的底层后端在解析请求时，并不会匹配如 `"text"` 或 `"reference_wav"` 等字符串键位，而是直接根据**数组的索引位置（Index）**，将数组中的值一一绑定赋给对应的函数形式参数。
->    - 例如：`data[0]` 固定绑定给参数 `text`（目标文本）；`data[1]` 绑定给 `control_instruction`（风格描述），以此类推。
-> 3. **强位置依赖**：如果您在请求时颠倒了数组的元素顺序，或者漏传了某一个元素，都会导致后端报错或数据绑定错乱。因此，您必须严格按照下方表格中的 **数组索引位置** 进行数据拼装。
-> 4. **替代方案（推荐）**：如果您觉得直接手写 JSON 数组很不直观、容易出错，**强烈推荐使用下方第三节介绍的客户端 SDK (Python/JS Client)**。SDK 允许您在代码中直接使用极具可读性的显式命名的参数（如 `text="xxx", denoise=True`），SDK 会在底层全自动将它们序列化为正确顺序的无键位 JSON 数组，大幅提升了开发效率与系统可维护性。
+> 本项目的 HTTP API 是基于 **Gradio 框架** 底层自动导出的。Gradio 框架的 REST API 设计有其独特的传输规范，这是因为：
+> 
+> 1. **Gradio 的事件映射机制**：
+>    在 [app.py](file:///d:/daima/VoxCPM-main/app.py) 中，合成按钮的点击事件绑定了 9 个 UI 控件组件作为输入参数：
+>    ```python
+>    run_btn.click(
+>        fn=_generate,
+>        inputs=[
+>            text,                 # [0] 目标文本框 (Target Text)
+>            control_instruction,  # [1] 控制风格输入框 (Control Instruction)
+>            reference_wav,        # [2] 参考音频上传组件 (Reference Audio)
+>            show_prompt_text,     # [3] 极致克隆开启复选框 (Ultimate Cloning Mode)
+>            prompt_text,          # [4] 提示音频的文本框 (Prompt Text)
+>            cfg_value,            # [5] CFG 引导滑块 (CFG Slider)
+>            DoNormalizeText,      # [6] 文本规范化开关 (Text Normalization)
+>            DoDenoisePromptAudio, # [7] 背景降噪开关 (Denoise)
+>            dit_steps,            # [8] LocDiT 步数滑块 (DIT Steps)
+>        ],
+>        ...
+>    )
+>    ```
+>    Gradio 框架根据底层的组件配置，自动将 `inputs` 列表中的 9 个控件的值，以**一维数组**的形式映射到 HTTP API 请求体的 `"data"` 字段中。
+> 
+> 2. **基于位置的参数解包 (Position-based unpacking)**：
+>    Gradio 的 Python 后端路由器接收到 API 的 POST 请求时，并不会解析 `"text"` 或 `"reference_wav"` 等字符串键位（Key），而是使用类似于 `_generate(*data)` 的 Python 位置解包语法，**纯粹根据数组的索引位置（Index）** 将各元素按顺序传递给回调函数。因此，请求体中不仅没有任何显式的键位名，而且数组顺序也**严禁发生颠倒或遗漏**。
+> 
+> 3. **强位置依赖的风险与防范**：
+>    - 如果您漏传了某一个元素，或者前后顺序发生错乱（如将第 3 项与第 4 项互换），后端在解包参数时便会发生类型错乱或抛出 `IndexError`，导致模型无法运行。
+>    - 发送请求时，务必严格参考下方的 **《请求参数 data 数组说明》** 表格拼装 JSON 数组。
+> 
+> 4. **优雅的替代方案（免手写 JSON 数组）**：
+>    如果您觉得手写无键位的 JSON 数组非常繁琐且极易出错，有以下两种优雅的方案：
+>    - **方案一（极力推荐）**：使用 Gradio 官方提供的轻量级 **Client SDK（详见第 4 节）**。无论是 Python 还是 JavaScript 客户端，都允许您通过**极具可读性的显式命名参数**（如 `text_input="xxx", denoise=True`）进行调用。客户端 SDK 会在底层基于配置描述信息（Config Schema），**全自动且无感地**将它们序列化为正确顺序的 positional 数组发送给服务器，极其安全和高效！
+>    - **方案二（生产级）**：使用本项目的本地 Python API（详见第 3 节）或采用高并发的 **vLLM-Omni 加速部署方案（详见第 5 节）**，它们均支持原生的命名参数与标准的 OpenAI 兼容 JSON 键值对格式。
 
 #### 请求参数 `data` 数组说明：
 | 数组索引 | 参数名称 | 类型 | 是否必填 | 默认值 | 详细说明与取值范围 |
@@ -110,7 +138,107 @@ VoxCPM2 拥有极强的多语言理解与合成能力，直接输入对应语种
 
 ---
 
-## 3. 客户端调用示例 (Client SDK Examples)
+## 3. 本地 Python API 调用指南 (Local Python API)
+
+除了通过 HTTP 请求和客户端 SDK 与服务交互，你还可以直接在本地 Python 环境中导入本项目的核心类 `voxcpm.VoxCPM`，直接调用模型进行推理。这种方式适合离线任务、批量合成脚本，或作为其他 Python 后端服务的库来嵌入。
+
+### A. 文本转语音 (Basic Text-to-Speech)
+
+```python
+from voxcpm import VoxCPM
+import soundfile as sf
+
+# 1. 加载模型（如果本地不存在会自动从云端下载缓存）
+model = VoxCPM.from_pretrained(
+    "openbmb/VoxCPM2",
+    load_denoiser=False, # 设为 False 以在不使用降噪时节约显存与加载时间
+)
+
+# 2. 生成语音
+wav = model.generate(
+    text="VoxCPM2 是目前推荐使用的多语言语音合成版本。",
+    cfg_value=2.0,
+    inference_timesteps=10,
+)
+
+# 3. 写入音频文件 (VoxCPM2 原生输出为 48kHz 高采样率音频)
+sf.write("demo.wav", wav, model.tts_model.sample_rate)
+print("已保存: demo.wav")
+```
+
+### B. 音色设计 (Voice Design)
+
+音色设计允许你仅用**自然语言描述**从零凭空创造一个全新音色，而无需提供任何参考音频。  
+**调用方法：** 在 `text` 参数的开头，用半角括号 `(描述内容)` 写入你的音色描述（如性别、年龄、情绪、说话风格等）：
+
+```python
+wav = model.generate(
+    text="(年轻女性，声音温柔甜美)你好，欢迎使用VoxCPM2的声音设计功能！",
+    cfg_value=2.0,
+    inference_timesteps=10,
+)
+sf.write("voice_design.wav", wav, model.tts_model.sample_rate)
+```
+
+### C. 可控声音克隆 (Controllable Voice Cloning)
+
+提供一段参考音频，模型在克隆其音色的同时，你依然可以通过在 `text` 前加入括号控制指令来调节语速、情感或说话风格。
+
+```python
+# 场景一：标准声音克隆（完美克隆原声音色）
+wav = model.generate(
+    text="这是 VoxCPM2 生成的克隆语音。",
+    reference_wav_path="path/to/voice.wav", # 你的参考音频路径
+)
+sf.write("clone.wav", wav, model.tts_model.sample_rate)
+
+# 场景二：带风格控制的声音克隆（克隆音色 + 控制表达风格）
+wav = model.generate(
+    text="(稍快一点，欢快的语气)这是带风格控制的克隆语音。",
+    reference_wav_path="path/to/voice.wav",
+    cfg_value=2.0,
+    inference_timesteps=10,
+)
+sf.write("controllable_clone.wav", wav, model.tts_model.sample_rate)
+```
+
+### D. 极致克隆 (Ultimate Voice Cloning)
+
+通过提供参考音频以及其对应的**精确文本转录**，模型能实现基于音频上下文续写的高保真克隆，完美还原所有呼吸声、节奏、停顿与情感细节。  
+为了获得最极致的克隆相似度，建议将同一个参考音频路径同时传给 `reference_wav_path` 与 `prompt_wav_path`：
+
+```python
+wav = model.generate(
+    text="这是使用VoxCPM2的极致克隆演示。",
+    prompt_wav_path="path/to/voice.wav",   # 提示音频路径
+    prompt_text="这是参考音频说出的内容文字。", # 提示音频的文本转录内容
+    reference_wav_path="path/to/voice.wav", # 参考音频路径（传入可大幅提升相似度）
+)
+sf.write("hifi_clone.wav", wav, model.tts_model.sample_rate)
+```
+
+### E. 实时流式合成 (Streaming API)
+
+如果你想实时的、低时延的获取生成的音频流（例如在实时对话机器人中），可以使用 `generate_streaming` 异步/生成器接口，它会以 Chunk 形式不断吐出音频片段：
+
+```python
+import numpy as np
+
+chunks = []
+# 逐步获取流式音频片段
+for chunk in model.generate_streaming(
+    text="使用VoxCPM进行流式语音合成非常简单！",
+):
+    chunks.append(chunk)
+
+# 拼接并保存
+wav = np.concatenate(chunks)
+sf.write("streaming.wav", wav, model.tts_model.sample_rate)
+```
+
+---
+
+## 4. 客户端调用示例 (Client SDK Examples)
 
 最方便的集成方式是直接使用 Gradio 官方的轻量级客户端 SDK。
 
@@ -195,7 +323,7 @@ console.log("生成的音频临时地址:", response.data[0].name);
 
 ---
 
-## 4. 高并发与生产部署方案 (Production Deployment)
+## 5. 高并发与生产部署方案 (Production Deployment)
 
 对于企业级生产环境或高吞吐量、低时延要求的并发请求场景，推荐使用以下两种高性能加速引擎进行部署，它们均提供了原生的 HTTP REST API 或 OpenAI 兼容端点：
 
@@ -241,14 +369,63 @@ console.log("生成的音频临时地址:", response.data[0].name);
   vllm serve openbmb/VoxCPM2 --omni --port 8000
   ```
 * **客户端调用示例 (Standard OpenAI API)**：
-  可以使用任何标准 OpenAI 客户端库，或者直接发起 `curl` 接口请求来获取音频文件：
+  可以使用任何标准 OpenAI 客户端库，或者直接发起 `curl` 接口请求来获取音频文件。
+
+  vLLM-Omni 不仅支持 OpenAI 官方标准的 `model`、`input`、`voice` 参数，还针对 VoxCPM2 的高级特性扩展了专门的自定义参数，使您能够在 OpenAI 规范下完美实现**声音设计**、**声音克隆**等核心功能：
+
+  #### vLLM-Omni TTS 参数规范说明：
+  | 参数名称 | 类型 | 必填 | 默认值 | 描述 |
+  | :--- | :--- | :--- | :--- | :--- |
+  | **`model`** | String | 是 | - | 模型名称，如 `"openbmb/VoxCPM2"`。 |
+  | **`input`** | String | 是 | - | 要合成的目标文本。 |
+  | **`voice`** | String | 否 | `"default"` | 预设说话人角色。 |
+  | **`speed`** | Float | 否 | `1.0` | 语速倍率，取值范围 `0.25 ~ 4.0`。 |
+  | **`response_format`** | String | 否 | `"mp3"` | 输出音频格式，支持 `"mp3"`、`"wav"`、`"flac"`、`"opus"`、`"pcm"`。 |
+  | **`task_type`** | String | 否 | `"CustomVoice"` | 任务类型：<br>• `"Base"`：标准 TTS / 音色设计 / 可控克隆。<br>• `"CustomVoice"`：极高克隆相似度模式。 |
+  | **`instructions`** | String | 否 | `""` | **控制指令 / 风格描述**：等同于网页端的 Control Instruction。用于进行“声音设计”（如 `"年轻女性，温柔甜美"`）或控制克隆风格。 |
+  | **`language`** | String | 否 | `"Auto"` | 文本语言（默认为自动识别）。 |
+  | **`ref_audio`** | String | 否 | `null` | **参考音频**：用于声音克隆。可传入公网音频 URL 链接，或 Base64 编码的 Audio Data URI（如 `data:audio/wav;base64,xxxx...`）。 |
+  | **`ref_text`** | String | 否 | `null` | **参考音频的文本内容**：用于极致克隆的文本转录引导。 |
+  | **`max_new_tokens`** | Integer | 否 | `2048` | 最大生成 Token 数限制。 |
+
+  #### 示例 1：极简调用（标准 OpenAI API 格式）
   ```bash
   curl http://localhost:8000/v1/audio/speech \
     -H "Content-Type: application/json" \
     -d '{
       "model": "openbmb/VoxCPM2",
       "input": "你好，欢迎使用通过 vLLM-Omni 引擎驱动的 OpenAI 兼容语音合成服务！",
-      "voice": "default"
+      "voice": "default",
+      "response_format": "wav"
     }' \
     --output vllm_output.wav
+  ```
+
+  #### 示例 2：声音设计（使用 `instructions` 参数创造全新音色）
+  ```bash
+  curl http://localhost:8000/v1/audio/speech \
+    -H "Content-Type: application/json" \
+    -d '{
+      "model": "openbmb/VoxCPM2",
+      "input": "你好，这是一段完全由文字描述定制生成的新声音。",
+      "instructions": "温文尔雅的中年男子，语气缓慢深沉。",
+      "speed": 0.9,
+      "response_format": "wav"
+    }' \
+    --output vllm_design.wav
+  ```
+
+  #### 示例 3：高精克隆（传入 `ref_audio` 参考音频 URL）
+  ```bash
+  curl http://localhost:8000/v1/audio/speech \
+    -H "Content-Type: application/json" \
+    -d '{
+      "model": "openbmb/VoxCPM2",
+      "input": "这是使用 OpenAI 格式进行极致声音克隆的音频效果。",
+      "ref_audio": "https://your-domain.com/assets/sample.wav",
+      "ref_text": "参考音频里原本说出的话语文字内容",
+      "task_type": "CustomVoice",
+      "response_format": "wav"
+    }' \
+    --output vllm_clone.wav
   ```
