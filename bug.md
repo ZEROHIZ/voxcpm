@@ -34,3 +34,16 @@
 - **解决方法**：
   - 修改 `app.py`，在 `VoxCPMDemo.get_or_load_voxcpm()` 方法中，调用 `from_pretrained` 时显式传入 `device=self.device`（即当前检测到的 `"cuda"` 还是 `"cpu"`）。
 - **预防经验**：在使用第三方深度学习加载器时，必须显式传入检测到或指定的 `device` 参数，绝对不能完全依赖其默认值，防止其静默回退到 `cpu` 或硬编码配置设备。
+
+## 5. Host 宿主机未配置 NVIDIA Container Toolkit 导致容器内无法检测到 GPU 显卡
+- **问题描述**：在运行带有 `--gpus all` 参数的 Docker 容器时，控制台输出 `WARNING: The NVIDIA Driver was not detected. GPU functionality will not be available. Use the NVIDIA Container Toolkit to start this container with GPU support`，导致容器退回到 CPU 运行模式。
+- **根本原因**：
+  - Docker 容器是高度隔离的，CUDA 库虽然已经完整安装在镜像中（`CUDA Version 12.1.1` 正常显示，证明镜像无误），但容器无法直接穿透并调用宿主机的物理 GPU。
+  - 宿主机没有正确安装或配置 **NVIDIA Container Toolkit**（或在 Windows WSL2 下 Docker Desktop 的 GPU 加速支持没有生效），导致 Docker 守护进程（Daemon）无法将宿主机的 GPU 驱动和硬件资源映射进容器。
+- **解决方法**：
+  - **Linux 宿主机**：需要在宿主机安装 NVIDIA 官方驱动，并配置 NVIDIA Container Toolkit。
+  - **Windows 宿主机**：
+    1. 确保 Windows 宿主机安装了 NVIDIA 最新官方显卡驱动。
+    2. 确保 Docker Desktop 设置中启用了 **WSL 2 based engine**。
+    3. 在 Windows 终端中运行 `wsl --update` 将 WSL2 升级到支持 GPU 虚拟化的最新版本，并通过在 Windows PowerShell 运行 `nvidia-smi` 确认显卡可以被 WSL2 读取。
+- **预防经验**：深度学习容器（如搭载 PyTorch CUDA 的镜像）在任何机器上运行时，必须首先确保**宿主机**配置好了 Docker GPU 硬件穿透桥梁，否则即使镜像内 CUDA 完美，也只能运行在 CPU 上。
