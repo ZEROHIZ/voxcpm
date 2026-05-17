@@ -49,3 +49,10 @@
   - **显卡驱动版本过旧限制**：
     - 若容器内 PyTorch 报 `The NVIDIA driver on your system is too old (found version 12090)`，说明宿主机的物理 NVIDIA 显卡驱动版本低于当前 PyTorch 镜像编译时要求的 CUDA 最低驱动门槛（例如，Windows GPU 显卡驱动必须升级到 531.14 或更高版本以支持 CUDA 12.1+）。必须通过 NVIDIA 官方 GeForce/Studio 工具更新 Windows 主机的物理显卡驱动。
 - **预防经验**：深度学习容器（如搭载 PyTorch CUDA 的镜像）在任何机器上运行时，必须首先确保**宿主机**配置好了 Docker GPU 硬件穿透桥梁且**驱动版本符合镜像内 PyTorch/CUDA 软件库的最低要求**，否则即使镜像内 CUDA 完美，也只能静默退回到 CPU 上。
+
+## 6. PyTorch CUDA 驱动与宿主机物理显卡驱动版本不兼容（降级 PyTorch CUDA 编译版本）
+- **问题描述**：在容器中运行时，由于宿主机的物理显卡驱动较旧（如 CUDA 12.0/11.8 兼容驱动），但 Docker 默认拉取了最新的 CUDA 12.1+ / 12.4+ PyTorch 运行库，导致 PyTorch 在启动时报错 `The NVIDIA driver on your system is too old (found version 12090)` 并降级到 CPU 推理。
+- **解决方法**：
+  1. 将 `Dockerfile` 中的基础镜像从 `nvidia/cuda:12.1.1` 降级为 `nvidia/cuda:11.8.0-cudnn8-runtime-ubuntu22.04`。
+  2. 修改 `Dockerfile` 中编译和安装依赖的 `uv pip compile/install` 步骤，显式加入参数 `--extra-index-url https://download.pytorch.org/whl/cu118`，使得 `uv` 能够下载完美兼容旧版物理显卡驱动的 `+cu118` PyTorch 和 torchaudio 库（版本仍保持为最新的 `2.5.1` 或 `2.5.x` 以保证功能完整，但编译底层使用的是更具兼容性的 CUDA 11.8）。
+- **预防经验**：如果宿主机的物理驱动不便更新，可以通过为容器环境定制较低 CUDA 编译版本的 PyTorch 轮子（如 `+cu118`），同时保留相同的 PyTorch 代码库版本，这样既可以不用更新 Windows/Linux 宿主机的物理显卡驱动，又能保证容器内 GPU 加速完美跑通。

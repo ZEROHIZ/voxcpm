@@ -1,4 +1,4 @@
-FROM nvidia/cuda:12.1.1-cudnn8-runtime-ubuntu22.04
+FROM nvidia/cuda:11.8.0-cudnn8-runtime-ubuntu22.04
 
 # Set environment variables
 ENV DEBIAN_FRONTEND=noninteractive
@@ -36,8 +36,8 @@ WORKDIR /app
 COPY pyproject.toml ./
 
 # Compile and install python dependencies using uv (caches layers)
-RUN uv pip compile pyproject.toml -o requirements.txt
-RUN uv pip install --system --no-cache -r requirements.txt
+RUN uv pip compile pyproject.toml --extra-index-url https://download.pytorch.org/whl/cu118 -o requirements.txt
+RUN uv pip install --system --no-cache -r requirements.txt --extra-index-url https://download.pytorch.org/whl/cu118
 
 # Copy the rest of the application
 COPY . .
