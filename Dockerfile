@@ -35,11 +35,16 @@ WORKDIR /app
 # Copy dependency files first for caching
 COPY pyproject.toml ./
 
-# Install python dependencies using uv
-RUN uv pip install --system --no-cache .
+# Compile and install python dependencies using uv (caches layers)
+RUN uv pip compile pyproject.toml -o requirements.txt
+RUN uv pip install --system --no-cache -r requirements.txt
 
 # Copy the rest of the application
 COPY . .
+
+# Install the local package without reinstalling dependencies
+ENV SETUPTOOLS_SCM_PRETEND_VERSION="0.0.0"
+RUN uv pip install --system --no-cache --no-deps .
 
 # Expose the default port
 EXPOSE 8808
