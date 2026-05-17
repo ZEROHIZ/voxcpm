@@ -1,6 +1,13 @@
 #!/bin/bash
 set -e
 
+# Limit CPU threads to prevent CPU exhaustion and container crashes under WSL2 / Docker
+export OMP_NUM_THREADS=4
+export MKL_NUM_THREADS=4
+export OPENBLAS_NUM_THREADS=4
+export VECLIB_MAXIMUM_THREADS=4
+export NUMEXPR_NUM_THREADS=4
+
 # Path to the persistent virtual environment and setup marker
 VENV_DIR="/app/data/venv"
 MARKER_FILE="$VENV_DIR/.setup_complete"
