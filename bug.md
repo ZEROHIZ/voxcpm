@@ -24,3 +24,13 @@
 - **问题描述**：GitHub Actions Runner 内存有限（7GB），用 `pip` 安装大型依赖（如 PyTorch、Transformers）极易触发 OOM 并返回 `exit code 1`。
 - **解决方法**：
   - 引入了 Rust 编写的超高速包管理工具 `uv`。在 Dockerfile 中通过 `uv pip install` 代替传统 `pip`，既加快了构建速度，又显著降低了内存使用，避免了 OOM 问题。
+
+## 4. TTS主模型启动后默认运行在 CPU，未利用 GPU 加速
+- **问题描述**：在容器启动时，控制台输出 `Running on device: cpu, dtype: bfloat16`，尽管使用的是 GPU 容器并且 CUDA 硬件加速正常可用，主合成模型仍然在 CPU 上缓慢推理。
+- **根本原因**：
+  - 在 `app.py` 中，调用 `voxcpm.VoxCPM.from_pretrained(self._model_id, optimize=True)` 时没有显式传入 `device` 参数。
+  - 模型加载器 `from_pretrained` 收到 `device=None` 时，会自动解析 Hugging Face 模型的 `config.json` 配置文件。
+  - 最新模型 `openbmb/VoxCPM2` 的 `config.json` 中配置的默认设备是 `"device": "cpu"`，这导致在没有显式指定设备的情况下，程序直接降级到 `cpu` 设备运行。
+- **解决方法**：
+  - 修改 `app.py`，在 `VoxCPMDemo.get_or_load_voxcpm()` 方法中，调用 `from_pretrained` 时显式传入 `device=self.device`（即当前检测到的 `"cuda"` 还是 `"cpu"`）。
+- **预防经验**：在使用第三方深度学习加载器时，必须显式传入检测到或指定的 `device` 参数，绝对不能完全依赖其默认值，防止其静默回退到 `cpu` 或硬编码配置设备。
