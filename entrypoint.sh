@@ -26,8 +26,8 @@ fi
 echo " 🔹 Activating virtual environment..."
 source "$VENV_DIR/bin/activate"
 
-# Ensure pip is up to date inside the venv
-pip install --upgrade pip --quiet
+# Ensure pip is up to date inside the venv using domestic mirror
+pip install --upgrade pip -i https://mirrors.aliyun.com/pypi/simple --quiet
 
 # Function to detect CUDA version supported by host driver
 detect_cuda_version() {
@@ -129,9 +129,9 @@ if [ "$SHOULD_SETUP" = "true" ]; then
         --index-url "$PYTORCH_INDEX_URL"
         
     echo " 📥 Installing remaining python dependencies from pyproject.toml..."
-    # Install the project and all other dependencies in editable mode
+    # Install the project and all other dependencies in editable mode using high-speed Alibaba Cloud mirror
     # Since torch/torchaudio are already installed in the virtual environment, they will be skipped.
-    pip install --no-cache-dir -e .
+    pip install --no-cache-dir -e . -i https://mirrors.aliyun.com/pypi/simple
     
     # Write setup complete marker file
     echo "$TARGET_CUDA" > "$MARKER_FILE"
