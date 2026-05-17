@@ -14,6 +14,15 @@
 | **`openbmb/VoxCPM2`** *(默认)* | 750M / LocDiT | 中、英、粤、日等多语言 | **最新二代模型**。支持“极致克隆”（仅需参考音频与文字即可完美还原节奏、语气、音色）、“可控克隆”（通过文本提示词控制音色与情感）、“声音设计”（无需参考音频，直接从零用文字描述声音）。效果极佳，强烈推荐。 |
 | **`openbmb/VoxCPM`** | 450M / Base | 中、英文为主 | **一代基础模型**。推理速度较快，对硬件配置要求稍低，但声音细节和控制力没有二代强。 |
 
+#### 🌍 支持的语言与方言 (Supported Languages & Dialects)
+
+VoxCPM2 拥有极强的多语言理解与合成能力，直接输入对应语种的原始文本即可开始合成（无需显式指定语言标签）。
+
+- **全球 30 种主要语言**：
+  阿拉伯语、缅甸语、中文（普通话）、丹麦语、荷兰语、英语、芬兰语、法语、德语、希腊语、希伯来语、印地语、印尼语、意大利语、日语、高棉语、韩语、老挝语、马来语、挪威语、波兰语、葡萄牙语、俄语、西班牙语、斯瓦希里语、瑞典语、菲律宾语、泰语、土耳其语、越南语。
+- **中文方言支持**：
+  四川话、粤语、吴语（上海话）、东北话、河南话、陕西话、山东话、天津话、闽南话。
+
 ### B. 辅助模型（自动加载）
 项目运行中还会自动加载并选用以下辅助模型，它们也默认缓存至 `data` 目录下：
 - **ASR 自动语音识别模型**: `iic/SenseVoiceSmall` (阿里通义实验室出品，用于在“极致克隆模式”下自动将你上传的参考音频转化为文本，高精度、极速)。
@@ -48,6 +57,16 @@
   "trigger_id": null
 }
 ```
+
+> [!IMPORTANT]
+> ### 💡 为什么 data 会没有键位（Key-Value 对）？
+> 
+> 本项目的 HTTP API 是基于 **Gradio 框架**底层自动导出的。Gradio 框架的 REST API 设计有其独特的规范：
+> 1. **基于位置的参数设计 (Position-based arguments)**：Gradio 会把前端 UI 中声明的每一个输入控件（例如“目标文本框”、“控制指令描述框”、“参考音频上传组件”、“CFG滑动条”等）按照它们在后台网页代码中定义的**声明顺序**，统一打包存放在一个无键值的列表数组中。
+> 2. **没有显式键位**：Gradio 的底层后端在解析请求时，并不会匹配如 `"text"` 或 `"reference_wav"` 等字符串键位，而是直接根据**数组的索引位置（Index）**，将数组中的值一一绑定赋给对应的函数形式参数。
+>    - 例如：`data[0]` 固定绑定给参数 `text`（目标文本）；`data[1]` 绑定给 `control_instruction`（风格描述），以此类推。
+> 3. **强位置依赖**：如果您在请求时颠倒了数组的元素顺序，或者漏传了某一个元素，都会导致后端报错或数据绑定错乱。因此，您必须严格按照下方表格中的 **数组索引位置** 进行数据拼装。
+> 4. **替代方案（推荐）**：如果您觉得直接手写 JSON 数组很不直观、容易出错，**强烈推荐使用下方第三节介绍的客户端 SDK (Python/JS Client)**。SDK 允许您在代码中直接使用极具可读性的显式命名的参数（如 `text="xxx", denoise=True`），SDK 会在底层全自动将它们序列化为正确顺序的无键位 JSON 数组，大幅提升了开发效率与系统可维护性。
 
 #### 请求参数 `data` 数组说明：
 | 数组索引 | 参数名称 | 类型 | 是否必填 | 默认值 | 详细说明与取值范围 |
@@ -173,3 +192,63 @@ const response = await client.predict("/generate", {
 
 console.log("生成的音频临时地址:", response.data[0].name);
 ```
+
+---
+
+## 4. 高并发与生产部署方案 (Production Deployment)
+
+对于企业级生产环境或高吞吐量、低时延要求的并发请求场景，推荐使用以下两种高性能加速引擎进行部署，它们均提供了原生的 HTTP REST API 或 OpenAI 兼容端点：
+
+### A. Nano-vLLM-VoxCPM 加速方案 (极低时延推理)
+
+[**Nano-vLLM-VoxCPM**](https://github.com/a710128/nanovllm-voxcpm) 是专为 VoxCPM 优化的轻量级并发推理服务引擎，支持多 GPU 连续批处理 (Continuous Batching) 和异步流式接口。
+
+* **性能指标**：在 NVIDIA RTX 4090 上，实时率 (RTF) 可从原生 PyTorch 的 `0.30` 自动大幅压缩降至 **`0.13`**！
+* **安装与启动**：
+  ```bash
+  pip install nano-vllm-voxcpm
+  ```
+* **Python 推理示例**：
+  ```python
+  from nanovllm_voxcpm import VoxCPM
+  import numpy as np
+  import soundfile as sf
+  
+  # 启动多租户/并发服务
+  server = VoxCPM.from_pretrained(model="/path/to/VoxCPM", devices=[0])
+  
+  # 发起异步流式合成请求
+  chunks = list(server.generate(target_text="你好，这是通过高性能 Nano-vLLM 推理引擎极速生成的音频。"))
+  sf.write("nanovllm_output.wav", np.concatenate(chunks), 48000)
+  server.stop()
+  ```
+
+---
+
+### B. vLLM-Omni 部署方案 (OpenAI 兼容端点)
+
+[**vLLM-Omni**](https://github.com/vllm-project/vllm-omni) 是官方 vLLM 项目的全模态扩展，原生支持 **VoxCPM2**。它包含 PagedAttention KV 缓存技术、流式分块输出以及完全兼容 OpenAI 规范的 API 接口，非常适合微服务集群部署。
+
+* **安装依赖**：
+  ```bash
+  uv pip install vllm==0.19.0 --torch-backend=auto
+  git clone https://github.com/vllm-project/vllm-omni.git && cd vllm-omni
+  uv pip install -e .
+  ```
+* **启动 OpenAI 兼容服务**：
+  通过命令行直接拉起与官方一致的 HTTP 端口（通过 `--omni` 选项启用全模态服务）：
+  ```bash
+  vllm serve openbmb/VoxCPM2 --omni --port 8000
+  ```
+* **客户端调用示例 (Standard OpenAI API)**：
+  可以使用任何标准 OpenAI 客户端库，或者直接发起 `curl` 接口请求来获取音频文件：
+  ```bash
+  curl http://localhost:8000/v1/audio/speech \
+    -H "Content-Type: application/json" \
+    -d '{
+      "model": "openbmb/VoxCPM2",
+      "input": "你好，欢迎使用通过 vLLM-Omni 引擎驱动的 OpenAI 兼容语音合成服务！",
+      "voice": "default"
+    }' \
+    --output vllm_output.wav
+  ```
