@@ -6,10 +6,14 @@ import numpy as np
 import torch
 import gradio as gr
 from typing import Optional, Tuple
+
+# Set model cache directories to the local 'data' folder
+os.environ["HF_HOME"] = os.path.abspath(os.path.join(os.path.dirname(__file__), "data", "huggingface"))
+os.environ["MODELSCOPE_CACHE"] = os.path.abspath(os.path.join(os.path.dirname(__file__), "data", "modelscope"))
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
+
 from funasr import AutoModel
 from pathlib import Path
-
-os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 import voxcpm
 
