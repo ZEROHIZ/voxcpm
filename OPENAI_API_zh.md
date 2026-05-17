@@ -36,14 +36,71 @@
 | **`speed`** | Float | 否 | `1.0` | 语速倍率（支持 `0.25 ~ 4.0`）。 |
 | **`response_format`** | String | 否 | `"mp3"` | 返回的音频格式。支持：`"mp3"`, `"wav"`, `"flac"`, `"opus"`。 |
 | **`instructions`** | String | 否 | `""` | **【声音设计 / 风格控制】**<br>描述说话风格、语气、情绪或音色特征（如 `"年轻女性，温柔甜美，语速缓慢"`）。若不提供参考音频，则直接根据该文字凭空生成新音色。 |
-| **`ref_audio`** | String | 否 | `null` | **【声音克隆】**<br>参考音频数据。支持：<br>1. **公网音频 URL**（如 `https://.../sample.wav`）<br>2. **Base64 编码的 Data URI**（如 `data:audio/wav;base64,...`）<br>3. **纯 Base64 字符串**。 |
+| **`ref_audio`** | String | 否 | `null` | **【声音克隆】**<br>参考音频数据。支持：<br>1. **公网音频 URL**（如 `https://.../sample.wav`）<br>2. **Base64 编码的 Data URI**（如 `data:audio/wav;base64,...`）<br>3. **纯 Base64 字符串**。<br>4. **服务器本地文件绝对路径**（如 `D:\audio.wav` 或物理上传后返回的 `temp_upload_xxx.wav` 路径，系统会自动识别本地文件并智能读取）。 |
 | **`ref_text`** | String | 否 | `null` | **【极致克隆引导文本】**<br>参考音频 `ref_audio` 所对应的原始说出的话。提供后将开启“极致克隆模式”，完美还原参考音频中的所有情感和音色细节。 |
 | **`task_type`** | String | 否 | `"CustomVoice"` | 任务类型：`"Base"` (标准/设计模式)，`"CustomVoice"` (极致克隆模式)。 |
 | **`language`** | String | 否 | `"Auto"` | 合成文本的语种（默认自动识别）。 |
 
 ---
 
-## 💻 3. 多场景客户端调用示例
+## 📤 3. 物理文件上传接口 (Multipart Upload API)
+
+当您在**跨机器**调用 API，且不想在客户端处理复杂的 Base64 编解码时，可以使用此接口先将客户端本地的音频文件物理上传给服务器，获得服务器的本地路径，再传给 `speech` 接口进行克隆。
+
+### 请求信息
+* **接口端点**：`POST http://localhost:8000/v1/audio/upload`
+* **内容类型**：`multipart/form-data`
+* **支持格式**：`.wav`, `.mp3`, `.flac`, `.ogg`, `.m4a`, `.aac`
+
+### 💻 cURL 上传示例
+```bash
+curl -X POST http://localhost:8000/v1/audio/upload \
+  -F "file=@/path/to/your_voice.wav"
+```
+
+#### 接口响应 JSON
+```json
+{
+  "file_path": "D:\\daima\\VoxCPM-main\\data\\uploads\\temp_upload_d6f8e7a0b1c2.wav"
+}
+```
+
+### 💻 Python 客户端上传与克隆联调示例
+```python
+import requests
+
+# 1. 物理上传本地音频文件
+upload_url = "http://localhost:8000/v1/audio/upload"
+files = {"file": open("my_voice.wav", "rb")}
+upload_res = requests.post(upload_url, files=files).json()
+
+server_audio_path = upload_res["file_path"]
+print(f"服务器缓存路径: {server_audio_path}")
+
+# 2. 将服务器返回的绝对路径传给 OpenAI SDK 进行极致克隆
+from openai import OpenAI
+client = OpenAI(base_url="http://localhost:8000/v1", api_key="none")
+
+response = client.audio.speech.create(
+    model="openbmb/VoxCPM2",
+    voice="default",
+    input="我已经成功将物理文件上传并完美克隆！",
+    response_format="wav",
+    extra_body={
+        "ref_audio": server_audio_path,  # 直接使用返回的物理路径！
+        "ref_text": "参考音频的文字内容",
+        "task_type": "CustomVoice"
+    }
+)
+response.stream_to_file("upload_cloned_output.wav")
+```
+
+> [!NOTE]
+> **生命周期说明**：通过此接口上传的物理文件会被保存在服务器的 `data/uploads/` 目录下。为了最大化保障隐私与磁盘健康，当对应的 `speech` 合成任务结束（或发生任何运行错误报错）后，**服务器会自动在 1 毫秒内物理删除此缓存文件**，确保不占用磁盘空间。
+
+---
+
+## 💻 4. 多场景客户端调用示例
 
 ### 🎨 场景一：极简调用（标准 OpenAI TTS）
 使用最基本的参数，系统将使用默认音色直接生成语音。
@@ -166,7 +223,7 @@ response.stream_to_file("cloned_voice.wav")
 
 ---
 
-## 🛠️ 4. 第三方平台对接指南
+## 🛠️ 5. 第三方平台对接指南
 
 由于本接口完全兼容 OpenAI 的 `/v1/audio/speech` 规范，因此非常容易对接进任何第三方 AI 编排平台：
 
