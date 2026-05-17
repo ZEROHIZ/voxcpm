@@ -1,6 +1,13 @@
 import os
-import re
 import sys
+
+# Set model cache directories to the local 'data' folder at the absolute top of the file!
+# This prevents early imports (like gradio or torch) from locking in default C: drive cache paths.
+os.environ["HF_HOME"] = os.path.abspath(os.path.join(os.path.dirname(__file__), "data", "huggingface"))
+os.environ["MODELSCOPE_CACHE"] = os.path.abspath(os.path.join(os.path.dirname(__file__), "data", "modelscope"))
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
+
+import re
 import logging
 import numpy as np
 import torch
@@ -9,11 +16,6 @@ torch.set_num_threads(4)
 torch.set_num_interop_threads(4)
 import gradio as gr
 from typing import Optional, Tuple
-
-# Set model cache directories to the local 'data' folder
-os.environ["HF_HOME"] = os.path.abspath(os.path.join(os.path.dirname(__file__), "data", "huggingface"))
-os.environ["MODELSCOPE_CACHE"] = os.path.abspath(os.path.join(os.path.dirname(__file__), "data", "modelscope"))
-os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 from funasr import AutoModel
 from pathlib import Path
