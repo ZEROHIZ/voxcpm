@@ -19,6 +19,6 @@ if not exist "%VENV_DIR%" (
     exit /b 1
 )
 
-echo [STATUS] Starting OpenAI API Gateway on http://localhost:8000 ...
+echo [STATUS] Starting OpenAI API Gateway on http://localhost:8089 ...
 "%VENV_DIR%\Scripts\python" openai_api.py
 pause

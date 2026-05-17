@@ -19,7 +19,7 @@
 .venv\Scripts\python openai_api.py
 ```
 
-服务启动成功后，默认会监听 **`http://localhost:8000`**，接口端点为 **`http://localhost:8000/v1/audio/speech`**。
+服务启动成功后，默认会监听 **`http://localhost:8089`**，接口端点为 **`http://localhost:8089/v1/audio/speech`**。
 
 ---
 
@@ -59,13 +59,13 @@
 当您在**跨机器**调用 API，且不想在客户端处理复杂的 Base64 编解码时，可以使用此接口先将客户端本地的音频文件物理上传给服务器，获得服务器的本地路径，再传给 `speech` 接口进行克隆。
 
 ### 请求信息
-* **接口端点**：`POST http://localhost:8000/v1/audio/upload`
+* **接口端点**：`POST http://localhost:8089/v1/audio/upload`
 * **内容类型**：`multipart/form-data`
 * **支持格式**：`.wav`, `.mp3`, `.flac`, `.ogg`, `.m4a`, `.aac`
 
 ### 💻 cURL 上传示例
 ```bash
-curl -X POST http://localhost:8000/v1/audio/upload \
+curl -X POST http://localhost:8089/v1/audio/upload \
   -F "file=@/path/to/your_voice.wav"
 ```
 
@@ -81,7 +81,7 @@ curl -X POST http://localhost:8000/v1/audio/upload \
 import requests
 
 # 1. 物理上传本地音频文件
-upload_url = "http://localhost:8000/v1/audio/upload"
+upload_url = "http://localhost:8089/v1/audio/upload"
 files = {"file": open("my_voice.wav", "rb")}
 upload_res = requests.post(upload_url, files=files).json()
 
@@ -90,7 +90,7 @@ print(f"服务器缓存路径: {server_audio_path}")
 
 # 2. 将服务器返回的绝对路径传给 OpenAI SDK 进行极致克隆
 from openai import OpenAI
-client = OpenAI(base_url="http://localhost:8000/v1", api_key="none")
+client = OpenAI(base_url="http://localhost:8089/v1", api_key="none")
 
 response = client.audio.speech.create(
     model="openbmb/VoxCPM2",
@@ -106,7 +106,7 @@ response = client.audio.speech.create(
 response.stream_to_file("upload_cloned_output.wav")
 ```
 
-> [!NOTE]
+ > [!NOTE]
 > **生命周期说明**：通过此接口上传的物理文件会被保存在服务器的 `data/uploads/` 目录下。为了最大化保障隐私与磁盘健康，当对应的 `speech` 合成任务结束（或发生任何运行错误报错）后，**服务器会自动在 1 毫秒内物理删除此缓存文件**，确保不占用磁盘空间。
 
 ---
@@ -118,7 +118,7 @@ response.stream_to_file("upload_cloned_output.wav")
 
 #### cURL 请求
 ```bash
-curl http://localhost:8000/v1/audio/speech \
+curl http://localhost:8089/v1/audio/speech \
   -H "Content-Type: application/json" \
   -d '{
     "model": "openbmb/VoxCPM2",
@@ -133,7 +133,7 @@ curl http://localhost:8000/v1/audio/speech \
 from openai import OpenAI
 
 client = OpenAI(
-    base_url="http://localhost:8000/v1",
+    base_url="http://localhost:8089/v1",
     api_key="none"  # API 密钥可以填任意字符串
 )
 
@@ -153,7 +153,7 @@ response.stream_to_file("default_tts.wav")
 
 #### cURL 请求
 ```bash
-curl http://localhost:8000/v1/audio/speech \
+curl http://localhost:8089/v1/audio/speech \
   -H "Content-Type: application/json" \
   -d '{
     "model": "openbmb/VoxCPM2",
@@ -170,7 +170,7 @@ curl http://localhost:8000/v1/audio/speech \
 from openai import OpenAI
 
 client = OpenAI(
-    base_url="http://localhost:8000/v1",
+    base_url="http://localhost:8089/v1",
     api_key="none"
 )
 
@@ -193,7 +193,7 @@ response.stream_to_file("tsundere_cat.wav")
 
 #### cURL 请求（支持 Base64 或 URL）
 ```bash
-curl http://localhost:8000/v1/audio/speech \
+curl http://localhost:8089/v1/audio/speech \
   -H "Content-Type: application/json" \
   -d '{
     "model": "openbmb/VoxCPM2",
@@ -211,12 +211,12 @@ curl http://localhost:8000/v1/audio/speech \
 from openai import OpenAI
 
 client = OpenAI(
-    base_url="http://localhost:8000/v1",
+    base_url="http://localhost:8089/v1",
     api_key="none"
 )
 
 # 传入参考音频的公网 URL 或是本地音频转换为 Base64 URI
-ref_audio_url = "https://your-domain.com/sample.wav"
+ref_audio_url = "https://your-domain.com/sample.wav"  
 
 response = client.audio.speech.create(
     model="openbmb/VoxCPM2",
@@ -240,7 +240,7 @@ response.stream_to_file("cloned_voice.wav")
 
 ### 在 Dify / FastGPT 中接入
 1. **添加自定义模型供应商**：选择 **OpenAI 兼容**。
-2. **API 基础 URL (Base URL)**：填写 `http://localhost:8000/v1` 或 `http://<您的局域网IP>:8000/v1`。
+2. **API 基础 URL (Base URL)**：填写 `http://localhost:8089/v1` 或 `http://<您的局域网IP>:8089/v1`。
 3. **API Key**：可填写任意字符（如 `none`）。
 4. **支持模型**：添加 `"openbmb/VoxCPM2"` 到文本转语音 (TTS) 模型列表中。
 5. 保存后，即可在工作流或聊天应用中直接启用 VoxCPM2 进行实时语音合成和播报！

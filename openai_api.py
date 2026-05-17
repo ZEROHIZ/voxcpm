@@ -255,4 +255,4 @@ async def text_to_speech(req: SpeechRequest):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("openai_api:app", host="0.0.0.0", port=8000, reload=False)
+    uvicorn.run("openai_api:app", host="0.0.0.0", port=8089, reload=False)
