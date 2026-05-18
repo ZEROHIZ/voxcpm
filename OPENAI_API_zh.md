@@ -164,7 +164,10 @@ curl http://localhost:8089/v1/audio/speech \
     "model": "openbmb/VoxCPM2",
     "input": "我是一只傲娇的猫咪，主人，你今天为什么这么晚才回来伺候我？",
     "instructions": "年轻女孩，声音软萌甜美，带着一丝傲娇、嗔怪的语气，语速偏慢。",
-    "response_format": "wav"
+    "response_format": "wav",
+    "cfg_value": 2.0,
+    "do_normalize": false,
+    "inference_timesteps": 20
   }' \
   --output tsundere_cat.wav
 ```
@@ -185,11 +188,13 @@ response = client.audio.speech.create(
     input="我是一只傲娇的猫咪，主人，你今天为什么这么晚才回来伺候我？",
     response_format="wav",
     extra_body={
-        "instructions": "年轻女孩，声音软萌甜美，带着一丝傲娇、嗔怪的语气，语速偏慢。"
+        "instructions": "年轻女孩，声音软萌甜美，带着一丝傲娇、嗔怪的语气，语速偏慢。",
+        "cfg_value": 2.0,
+        "do_normalize": False,
+        "inference_timesteps": 20
     }
 )
 response.stream_to_file("tsundere_cat.wav")
-```
 
 ---
 
@@ -206,7 +211,11 @@ curl http://localhost:8089/v1/audio/speech \
     "ref_audio": "https://your-domain.com/sample.wav",
     "ref_text": "参考音频原作者说出来的原始文本文字",
     "task_type": "CustomVoice",
-    "response_format": "wav"
+    "response_format": "wav",
+    "cfg_value": 2.5,
+    "do_normalize": false,
+    "denoise": true,
+    "inference_timesteps": 10
   }' \
   --output cloned_voice.wav
 ```
@@ -231,11 +240,14 @@ response = client.audio.speech.create(
     extra_body={
         "ref_audio": ref_audio_url,
         "ref_text": "参考音频原作者说出来的原始文本文字",
-        "task_type": "CustomVoice"
+        "task_type": "CustomVoice",
+        "cfg_value": 2.5,
+        "do_normalize": False,
+        "denoise": True,
+        "inference_timesteps": 10
     }
 )
 response.stream_to_file("cloned_voice.wav")
-```
 
 ---
 
