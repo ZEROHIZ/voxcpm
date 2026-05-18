@@ -68,7 +68,11 @@ class SpeechRequest(BaseModel):
     ref_audio: Optional[str] = None
     ref_text: Optional[str] = None
     task_type: Optional[str] = "CustomVoice"
-
+    # 高级设置参数兼容 (CFG, 文本规范化, 降噪, LocDIT 步数)
+    cfg_value: Optional[float] = 2.0
+    do_normalize: Optional[bool] = False
+    denoise: Optional[bool] = False
+    inference_timesteps: Optional[int] = 20
 
 def validate_audio_content(file_bytes: bytes, extension: str) -> bool:
     """
@@ -213,15 +217,20 @@ async def text_to_speech(req: SpeechRequest):
         # It handles model loading, device placement, zip-enhancement, text-normalization, and CPU unloading.
         prompt_text = req.ref_text or ""
         
+        cfg_val = req.cfg_value if req.cfg_value is not None else 2.0
+        norm_val = req.do_normalize if req.do_normalize is not None else False
+        denoise_val = req.denoise if req.denoise is not None else False
+        steps_val = req.inference_timesteps if req.inference_timesteps is not None else 20
+
         sample_rate, wav_data = demo.generate_tts_audio(
             text_input=req.input,
             control_instruction=req.instructions or "",
             reference_wav_path_input=temp_wav_path,
             prompt_text=prompt_text,
-            cfg_value_input=2.0,
-            do_normalize=True,
-            denoise=True,
-            inference_timesteps=10
+            cfg_value_input=cfg_val,
+            do_normalize=norm_val,
+            denoise=denoise_val,
+            inference_timesteps=steps_val
         )
 
         # 3. Write audio to an in-memory buffer
