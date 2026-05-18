@@ -2,7 +2,7 @@ import requests
 import time
 import socket
 
-url = "http://localhost:8089/v1/audio/restart"
+url = "http://192.168.110.30:8089/v1/audio/restart"
 
 print("=" * 60)
 print("   VoxCPM2 API Gateway - Hot Restart Test Script")
@@ -26,7 +26,7 @@ time.sleep(1.5)  # Wait for the python process to exit
 
 # 3. Poll and wait for it to self-heal and boot back up
 print("[3/3] Polling server to verify successful auto-reboot...")
-host = "127.0.0.1"
+host = "192.168.110.30"
 port = 8089
 reboot_successful = False
 

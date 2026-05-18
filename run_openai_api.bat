@@ -26,10 +26,14 @@ set EXIT_CODE=%errorlevel%
 echo ==================================================================
 echo     Application exited with code: %EXIT_CODE%
 echo ==================================================================
-if "%EXIT_CODE%"=="3" (
-    echo [RESTART] Force restart signal detected (exit code 3).
-    echo           Re-launching API Gateway in 2 seconds...
-    ping 127.0.0.1 -n 3 >nul
-    goto LAUNCH_API
-)
+if "%EXIT_CODE%"=="3" goto DO_RESTART
+goto END
+
+:DO_RESTART
+echo [RESTART] Force restart signal detected (exit code 3).
+echo           Re-launching API Gateway in 2 seconds...
+ping 127.0.0.1 -n 3 >nul
+goto LAUNCH_API
+
+:END
 pause
