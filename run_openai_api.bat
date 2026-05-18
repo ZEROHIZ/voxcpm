@@ -19,6 +19,17 @@ if not exist "%VENV_DIR%" (
     exit /b 1
 )
 
+:LAUNCH_API
 echo [STATUS] Starting OpenAI API Gateway on http://localhost:8089 ...
 "%VENV_DIR%\Scripts\python" openai_api.py
+set EXIT_CODE=%errorlevel%
+echo ==================================================================
+echo     Application exited with code: %EXIT_CODE%
+echo ==================================================================
+if "%EXIT_CODE%"=="3" (
+    echo [RESTART] Force restart signal detected (exit code 3).
+    echo           Re-launching API Gateway in 2 seconds...
+    ping 127.0.0.1 -n 3 >nul
+    goto LAUNCH_API
+)
 pause

@@ -251,6 +251,30 @@ response.stream_to_file("cloned_voice.wav")
 
 ---
 
+### 🧹 4.4 维护接口：强制重启释放显存 (Maintenance & Hot Restart)
+当您的 API 网关持续运行或完成高强度合成后，如果您希望主动清空 GPU 显存 (VRAM) 与系统 RAM，接口提供了 **`/v1/audio/restart`** 维护端点。
+
+#### cURL 触发强制重启
+```bash
+curl -X POST http://localhost:8089/v1/audio/restart
+```
+
+#### 返回响应
+```json
+{
+  "status": "success",
+  "message": "API Gateway is restarting to release GPU memory and clean RAM..."
+}
+```
+
+> [!TIP]
+> **工作原理**：
+> 1. 发起请求后，网关会通过后台线程延迟 1 秒安全退出当前 Python 进程（返回 Exit Code `3`）。
+> 2. 项目配套的启动器 **`run_openai_api.bat`** 拥有**自愈重载循环**，检测到 Exit Code `3` 时会在 2 秒内重新拉起 API 服务。
+> 3. 这种热重启可以**100% 物理释放由于 PyTorch/CUDA 缓存占用的显存和内存**，非常适合在自动流中作为定时或批量任务后的保洁工作。
+
+---
+
 ## 🛠️ 5. 第三方平台对接指南
 
 由于本接口完全兼容 OpenAI 的 `/v1/audio/speech` 规范，因此非常容易对接进任何第三方 AI 编排平台：

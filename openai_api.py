@@ -265,6 +265,26 @@ async def text_to_speech(req: SpeechRequest):
             except Exception as cleanup_err:
                 logger.warning(f"Failed to clean up temporary file {temp_wav_path}: {str(cleanup_err)}")
 
+@app.post("/v1/audio/restart", tags=["Maintenance"])
+async def force_restart_api():
+    """
+    Forcefully restarts the API Gateway process (exits with code 3).
+    A loop launcher script (like run_openai_api.bat) will automatically catch this
+    and restart the gateway, completely releasing GPU VRAM and CPU RAM.
+    """
+    import threading
+    import time
+    logger.info("Force restart requested via API endpoint /v1/audio/restart ...")
+    
+    def _do_exit():
+        time.sleep(1.0)
+        logger.info("Exiting Python process with exit code 3 for auto-restart...")
+        os._exit(3)
+        
+    threading.Thread(target=_do_exit, daemon=True).start()
+    return {"status": "success", "message": "API Gateway is restarting to release GPU memory and clean RAM..."}
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("openai_api:app", host="0.0.0.0", port=8089, reload=False)
+
